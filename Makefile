@@ -25,6 +25,7 @@ BUILD		:= build
 SOURCES		:= source
 INCLUDES	:= include
 DATA		:=
+GRAPHICS	:= graphics
 MUSIC		:=
 
 #---------------------------------------------------------------------------------
@@ -78,6 +79,7 @@ CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+BMPFILES	:=	$(foreach dir,$(GRAPHICS),$(notdir $(wildcard $(dir)/*.bmp)))
 
 ifneq ($(strip $(MUSIC)),)
 	export AUDIOFILES	:=	$(foreach dir,$(notdir $(wildcard $(MUSIC)/*.*)),$(CURDIR)/$(MUSIC)/$(dir))
@@ -100,9 +102,11 @@ endif
 
 export OFILES_BIN := $(addsuffix .o,$(BINFILES))
 
+export OFILES_BMP := $(BMPFILES:.bmp=.o)
+
 export OFILES_SOURCES := $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
  
-export OFILES := $(OFILES_BIN) $(OFILES_SOURCES)
+export OFILES := $(OFILES_BIN) $(OFILES_BMP) $(OFILES_SOURCES)
 
 export HFILES := $(addsuffix .h,$(subst .,_,$(BINFILES)))
 
@@ -157,6 +161,16 @@ soundbank.bin soundbank.h : $(AUDIOFILES)
 #---------------------------------------------------------------------------------
 	@echo $(notdir $<)
 	@$(bin2o)
+
+#---------------------------------------------------------------------------------
+# This rule creates assembly source files using grit
+# grit takes an image file and a .grit describing how the file is to be processed
+# add additional rules like this for each image extension
+# you use in the graphics folders
+#---------------------------------------------------------------------------------
+%.s %.h: %.bmp %.grit
+#---------------------------------------------------------------------------------
+	grit $< -fts -o$*
 
 
  
