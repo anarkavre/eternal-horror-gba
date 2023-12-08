@@ -115,10 +115,10 @@ uint32_t level = 1;
 const uint32_t numLevels = 4;
 const uint32_t *levels[] =
 {
-	level1Data,
-	level2Data,
-	level3Data,
-	level4Data
+	level1_map_bin,
+	level2_map_bin,
+	level3_map_bin,
+	level4_map_bin
 };
 
 fixed_t cameraX;
@@ -509,7 +509,7 @@ void Update()
 				cameraX = (cameraGridX * 64 + 32) << FRACBITS;
 				cameraY = (cameraGridY * 64 + 32) << FRACBITS;
 				cameraAngle = levelData[2];
-				memcpy(mapData, &levelData[3], mapWidth * mapHeight * sizeof(uint32_t));
+				memcpy(mapData, &levelData[7], mapWidth * mapHeight * sizeof(uint32_t));
 			}
 			else
 			{
@@ -1053,7 +1053,7 @@ void Update()
 			cameraX = (cameraGridX * 64 + 32) << FRACBITS;
 			cameraY = (cameraGridY * 64 + 32) << FRACBITS;
 			cameraAngle = levelData[2];
-			memcpy(mapData, &levelData[3], mapWidth * mapHeight * sizeof(uint32_t));
+			memcpy(mapData, &levelData[7], mapWidth * mapHeight * sizeof(uint32_t));
 			state = 1;
 			health = 100;
 			

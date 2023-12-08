@@ -1,9 +1,9 @@
 #ifndef __LEVELS_H__
 #define __LEVELS_H__
 
-extern const uint32_t level1Data[4099];
-extern const uint32_t level2Data[4099];
-extern const uint32_t level3Data[4099];
-extern const uint32_t level4Data[4099];
+#include "level1_map_bin.h"
+#include "level2_map_bin.h"
+#include "level3_map_bin.h"
+#include "level4_map_bin.h"
 
 #endif
