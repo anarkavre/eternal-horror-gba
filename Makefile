@@ -24,7 +24,7 @@ TARGET		:= $(notdir $(CURDIR))
 BUILD		:= build
 SOURCES		:= source
 INCLUDES	:= include
-DATA		:= levels
+DATA		:= levels music
 GRAPHICS	:= graphics
 MUSIC		:=
 
@@ -33,11 +33,17 @@ MUSIC		:=
 #---------------------------------------------------------------------------------
 ARCH	:=	-mthumb -mthumb-interwork
 
-CFLAGS	:=	-g -Wall -O3\
-		-mcpu=arm7tdmi -mtune=arm7tdmi\
- 		-fomit-frame-pointer\
-		-ffast-math \
-		$(ARCH)
+ifeq ($(DEBUG), 1)
+	CFLAGS	:=	-gdwarf-2 -Wall\
+			-mcpu=arm7tdmi -mtune=arm7tdmi\
+			$(ARCH)
+else
+	CFLAGS	:=	-g -Wall -O3\
+			-mcpu=arm7tdmi -mtune=arm7tdmi\
+			-fomit-frame-pointer\
+			-ffast-math \
+			$(ARCH)
+endif
 
 CFLAGS	+=	$(INCLUDE)
 

@@ -17,6 +17,9 @@
 #include <gba_interrupt.h>
 #include <gba_systemcalls.h>
 #include <gba_input.h>
+#include <gba_sound.h>
+#include <gba_dma.h>
+#include <gba_timers.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -26,6 +29,7 @@
 #include "fixed.h"
 #include "graphics.h"
 #include "levels.h"
+#include "music.h"
 
 typedef struct
 {
@@ -65,6 +69,16 @@ typedef struct
 	uint32_t top[120];
 	uint32_t pad2;
 } plane_t;
+
+typedef struct
+{
+	uint32_t *data;
+	uint32_t size;
+	uint32_t repeat;
+	uint32_t count;
+	uint32_t loop;
+	uint32_t playing;
+} sound_t;
 
 const fixed_t scalarTable[256] =
 {
@@ -115,10 +129,10 @@ uint32_t level = 1;
 const uint32_t numLevels = 4;
 const uint32_t *levels[] =
 {
-	level1_map_bin,
-	level2_map_bin,
-	level3_map_bin,
-	level4_map_bin
+	(const uint32_t *)level1_map_bin,
+	(const uint32_t *)level2_map_bin,
+	(const uint32_t *)level3_map_bin,
+	(const uint32_t *)level4_map_bin
 };
 
 fixed_t cameraX;
@@ -195,6 +209,20 @@ uint32_t bloodSpeed[120];
 uint32_t bloodTics = 0;
 
 uint32_t solidPlanes = 0;
+
+sound_t sound;
+
+const uint32_t *music[] =
+{
+	(const uint32_t *)music1_bin,
+	(const uint32_t *)music2_bin
+};
+
+const uint32_t musicSize[] =
+{
+	music1_bin_size,
+	music2_bin_size
+};
 
 uint32_t IWRAM_CODE FindHeight(fixed_t d)
 {
@@ -372,6 +400,47 @@ void IWRAM_CODE DrawRect(int32_t x, int32_t y, int32_t width, int32_t height, ui
 	} while (countY--);
 }
 
+void StopSound()
+{
+	REG_SOUNDCNT_H = 0;
+	REG_SOUNDCNT_X = 0;
+	REG_TM0CNT_H = 0;
+	REG_DMA1CNT = 0;
+	REG_TM1CNT_H = 0;
+	
+	sound.playing = 0;
+}
+
+void StartSound(uint32_t *data, uint32_t size, uint32_t repeat)
+{
+	if (sound.playing)
+		StopSound();
+	
+	sound.data = data;
+	sound.size = size;
+	sound.repeat = repeat;
+	
+	REG_SOUNDCNT_H = SNDA_VOL_100 | SNDA_L_ENABLE | SNDA_R_ENABLE | SNDA_RESET_FIFO;
+	REG_SOUNDCNT_X = 0x0080;
+	REG_TM0CNT_L = 65536 - (16777216 / 16384);
+	REG_TM0CNT_H = TIMER_START;
+	REG_DMA1SAD = (u32)data;
+	REG_DMA1DAD = (u32)&REG_FIFO_A;
+	REG_DMA1CNT = DMA_DST_FIXED | DMA_REPEAT | DMA32 | DMA_SPECIAL | DMA_ENABLE;
+	
+	if (size < 65536)
+		REG_TM1CNT_L = 65536 - size;
+	else
+		REG_TM1CNT_L = 0;
+	
+	REG_TM1CNT_H = TIMER_COUNT | TIMER_IRQ | TIMER_START;
+	
+	sound.count = size;
+	sound.loop = (size + 65535) / 65536;
+	
+	sound.playing = 1;
+}
+
 void Update()
 {
 	uint16_t keys = keysDown();
@@ -510,6 +579,8 @@ void Update()
 				cameraY = (cameraGridY * 64 + 32) << FRACBITS;
 				cameraAngle = levelData[2];
 				memcpy(mapData, &levelData[7], mapWidth * mapHeight * sizeof(uint32_t));
+				
+				StartSound(music[(level - 1) % 2], musicSize[(level - 1) % 2], 1);
 			}
 			else
 			{
@@ -1063,7 +1134,10 @@ void Update()
 		else if (state == 4 && restartLevelPressed)
 			state = 5;
 		else if (restartLevelPressed)
+		{
 			state = 2;
+			StartSound(music[(level - 1) % 2], musicSize[(level - 1) % 2], 1);
+		}
 	}
 }
 
@@ -1470,11 +1544,51 @@ void vblankInterrupt()
 	count++;
 }
 
+void timer1Interrupt()
+{
+	sound.count -= 65536;
+	sound.loop--;
+	
+	if (sound.loop == 0)
+	{
+		if (sound.repeat)
+		{
+			REG_DMA1CNT = 0;
+			REG_DMA1SAD = (u32)sound.data;
+			REG_DMA1CNT = DMA_DST_FIXED | DMA_REPEAT | DMA32 | DMA_SPECIAL | DMA_ENABLE;
+			
+			REG_TM1CNT_H = 0;
+			
+			if (sound.size < 65536)
+				REG_TM1CNT_L = 65536 - sound.size;
+			else
+				REG_TM1CNT_L = 0;
+			
+			REG_TM1CNT_H = TIMER_COUNT | TIMER_IRQ | TIMER_START;
+			
+			sound.count = sound.size;
+			sound.loop = (sound.size + 65535) / 65536;
+		}
+		else
+		{
+			StopSound();
+		}
+	}
+	else if (sound.loop == 1)
+	{
+		REG_TM1CNT_H = 0;
+		REG_TM1CNT_L = 65536 - sound.count;
+		REG_TM1CNT_H = TIMER_COUNT | TIMER_IRQ | TIMER_START;
+	}
+}
+
 int main(void)
 {
 	irqInit();
 	irqSet(IRQ_VBLANK, vblankInterrupt);
+	irqSet(IRQ_TIMER1, timer1Interrupt);
 	irqEnable(IRQ_VBLANK);
+	irqEnable(IRQ_TIMER1);
 	
 	REG_IME = 1;
 	
@@ -1497,6 +1611,8 @@ int main(void)
 	
 	for (uint32_t i = 0; i < 120; i++)
 		xTable[i] = (((SCREEN_WIDTH >> 1) - 120) >> 1) + i;
+	
+	StartSound(music[(level - 1) % 2], musicSize[(level - 1) % 2], 1);
 	
 	srand((unsigned)time(NULL));
 	
